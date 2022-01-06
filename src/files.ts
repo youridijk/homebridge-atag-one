@@ -16,7 +16,7 @@ export function readDeviceConfig(){
     const file = fs.readFileSync(configFileName);
     return JSON.parse(file.toString('utf8'));
   }else{
-    return {base_url: null};
+    return {base_url: undefined};
   }
 }
 

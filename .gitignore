@@ -86,7 +86,6 @@ web_modules/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/
@@ -120,3 +119,4 @@ dist
 .pnp.*
 
 homebridge-config.json
+.idea

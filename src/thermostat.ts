@@ -1,42 +1,69 @@
-import {AccessoryConfig, API, CharacteristicValue, Logging, Service} from 'homebridge';
-import dgram from 'dgram';
-import {readDeviceConfig, updateDeviceConfig} from './files';
-import {Communicator} from './communicator';
-import {chmod} from 'fs';
+import {AccessoryConfig, API, Characteristic, CharacteristicValue, HAPStatus, Logger, Service} from 'homebridge';
+import {readDeviceConfig} from './files';
+import {WithUUID} from 'hap-nodejs/dist/types';
+import {AtagOne} from './AtagOne';
 
 export class AtagThermostat {
-  private readonly service: Service;
-  private readonly Characteristic;
-  private readonly logger: Logging;
+  private readonly service: Service = new this.api.hap.Service.Thermostat();
+  private readonly accessoryInformation = new this.api.hap.Service.AccessoryInformation();
+  private readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  private updateDate: Date = new Date();
 
+  private thermostat: AtagOne;
 
-  private targetTemperature: CharacteristicValue = 20.5;
-  private currentTemperature: CharacteristicValue = 20.5;
-  private currentHeatingStatus: CharacteristicValue = 1;
-
-  private baseUrl;
-  private readonly accountAuth = {
-    user_account: '',
-    mac_address: '',
-  };
-
-  constructor(logger: Logging, config: AccessoryConfig, api: API) {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: AccessoryConfig,
+    private readonly api: API,
+  ) {
     const deviceConfig = readDeviceConfig();
-    this.baseUrl = deviceConfig.baseUrl;
 
-    if(this.baseUrl != null){
-      logger.debug('Loaded base url ' + this.baseUrl);
+    const configIpAddress: string = config['ipAddress'];
+    let baseUrl: string | undefined;
+
+    // Optional ip of the thermostat can be entered in the config
+    // This is just in case the ip can't be found in local network
+    if(configIpAddress){
+      baseUrl = `http://${configIpAddress}:10000`;
+      this.logger.info('Loaded base url from config');
+    } else if(deviceConfig['baseUrl']){
+      baseUrl = deviceConfig['baseUrl'];
+      this.logger.info('Loaded base url from stored config');
     }
 
-    this.initSocket();
+    this.thermostat = new AtagOne(baseUrl);
+    this.thermostat.startBroadCastSocket(newBaseUrl => {
+      this.logger.info(`New base url: ${newBaseUrl}`);
+    });
 
-    this.service = new api.hap.Service.Thermostat();
-    this.Characteristic = api.hap.Characteristic;
-    this.logger = logger;
+    this.initCharacteristics();
 
+    // Set initial temperature so it doesn't return illegal values
+    this.updateCharacteristicValues(16, 16, 0);
+    this.getTemperatures().catch(error => this.logger.error(`Error getting temperatures in constructor: ${error}`));
+
+    // close socket when program shuts down (for development with nodemon)
+    process.on('SIGTERM', () => {
+      // eslint-disable-next-line eqeqeq
+      this.thermostat.closeBroadcastSocket();
+    });
+  }
+
+
+
+  private initCharacteristics() {
+    this.accessoryInformation
+      .setCharacteristic(this.Characteristic.Manufacturer, 'Atag')
+      .setCharacteristic(this.Characteristic.Model, 'Atag One Thermostat')
+      .getCharacteristic(this.Characteristic.SerialNumber)
+      // Getting device id is async, so we bind a getter to serial number
+      .onGet(this.getSerial.bind(this));
+
+    // Only getter for heating state, because Atag One determines this
     this.service.getCharacteristic(this.Characteristic.CurrentHeatingCoolingState)
-      .onGet(this.getCurrentHeatingCoolingState.bind(this));
+      .onGet(this.getCurrentHeatingState.bind(this));
 
+    // Only allow off and heating
     this.service.getCharacteristic(this.Characteristic.TargetHeatingCoolingState)
       .setProps({
         minValue: 0,
@@ -44,121 +71,95 @@ export class AtagThermostat {
         validValues: [0, 1],
       });
 
+    // Min temperature for Atag One is 4 degrees Celsius but lower than 16 is not realistic
+    // But you can change this in the config
     this.service.getCharacteristic(this.Characteristic.TargetTemperature)
       .setProps({
-        minValue: 16,
+        minValue: this.config['minimumTargetValue'] || 16,
         maxValue: 25,
         minStep: 0.5,
       })
       .onGet(this.getTargetTemperature.bind(this))
       .onSet(this.setTargetTemperature.bind(this));
 
+    // Only add getter for current temperature because setter is unnecessary
     this.service.getCharacteristic(this.Characteristic.CurrentTemperature)
       .onGet(this.getCurrentTemperature.bind(this));
-
-    // this.logger.debug("UR: : " + this.baseUrl);
-
-    // close socket when program shuts down (for development with nodemon)
-    process.on('SIGTERM', () => {
-      // eslint-disable-next-line eqeqeq
-      if (this.broadcastSocket != null) {
-        this.broadcastSocket.close();
-      }
-    });
   }
 
-  private broadcastSocket;
-
-  // Atag one thermostat sends every 10 seconds UDP broadcast message in the network
-  private initSocket() {
-    this.broadcastSocket = dgram.createSocket('udp4', (message, peer) => {
-      const decodedMessage = message.toString('utf8');
-      if (decodedMessage.startsWith('ONE ')) {
-        const newUrl = `http://${peer.address}:10000`;
-
-        if (newUrl !== this.baseUrl) {
-          this.baseUrl = newUrl;
-          this.logger.debug(`New base url: ${newUrl}`);
-          updateDeviceConfig(this.baseUrl);
-          this.updateTemperatures().then(null);
-        }
-      }
-    });
-    this.broadcastSocket.bind(11_000);
-  }
-
-  private async updateTemperatures() {
-    const response = await Communicator.getDataReport(this.baseUrl);
-
-    // eslint-disable-next-line eqeqeq
-    if(response == null){
-      this.logger.debug('Could not update data after new base url');
-    }else{
-      this.updateCharacteristicValues(response.room_temp, response.shown_set_temp, response.boiler_status & 8);
-    }
-  }
-
-  getServices() {
-    return [this.service];
-  }
-
-  private async getTargetTemperature(): Promise<CharacteristicValue> {
-    const response = await Communicator.getDataReport(this.baseUrl);
-    // eslint-disable-next-line eqeqeq
-    if (response == null) {
-      this.logger.debug('Response is null');
-      return 16;
-    } else {
-      this.updateCharacteristicValues(response.room_temp, response.shown_set_temp, response.boiler_status & 8);
-      return response.shown_set_temp;
-    }
-  }
-
-  private async getCurrentTemperature(): Promise<CharacteristicValue> {
-    const response = await Communicator.getDataReport(this.baseUrl);
-    // eslint-disable-next-line eqeqeq
-    if (response == null) {
-      return 16;
-    } else {
-      this.updateCharacteristicValues(response.room_temp, response.shown_set_temp, response.boiler_status & 8);
-      return response.room_temp;
-    }
-  }
-
-  private async getCurrentHeatingCoolingState(): Promise<CharacteristicValue> {
-    const response = await Communicator.getDataReport(this.baseUrl);
-    // eslint-disable-next-line eqeqeq
-    if (response == null) {
-      return 0;
-    } else {
-      this.updateCharacteristicValues(response.room_temp, response.shown_set_temp, response.boiler_status & 8);
-      return response.boiler_status & 8;
-    }
-  }
-
-  async setTargetTemperature(targetTemperature: CharacteristicValue) {
-    this.targetTemperature = targetTemperature;
-    const data = {ch_mode_temp: targetTemperature};
-    await Communicator.updateData(this.baseUrl, data);
+  private async getTemperatures() {
+    const response = (await this.thermostat.getDataReport())['report'];
+    // fourth bit of boiler_status is heating state, thanks to https://github.com/kozmoz/atag-one-api/wiki/Thermostat-Protocol
+    this.updateCharacteristicValues(response['room_temp'], response['shown_set_temp'], (response['boiler_status'] & 8) === 8);
   }
 
   private updateCharacteristicValues(currentTemperature: CharacteristicValue, targetTemperature: CharacteristicValue,
-    heatingState: CharacteristicValue){
-    this.updateCurrentTemperature(currentTemperature);
-    this.updateTargetTemperature(targetTemperature);
-    this.updateHeatingState(heatingState);
+    heatingState: CharacteristicValue) {
+    this.service.updateCharacteristic(this.Characteristic.CurrentTemperature, currentTemperature);
+    this.service.updateCharacteristic(this.Characteristic.TargetTemperature, targetTemperature);
+    this.service.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, heatingState);
   }
 
-  private updateCurrentTemperature(temperature: CharacteristicValue){
-    this.service.updateCharacteristic(this.Characteristic.CurrentTemperature, temperature);
+  getServices(): Service[] {
+    return [this.service, this.accessoryInformation];
   }
 
-  private updateTargetTemperature(temperature: CharacteristicValue){
-    this.service.updateCharacteristic(this.Characteristic.TargetTemperature, temperature);
+  private readonly dateDiff = 5 * 1000;
+
+  private async getCharacteristic(characteristic: WithUUID<{ new(): Characteristic }>) {
+    const currentDate = new Date();
+    const updateDate = this.updateDate;
+    this.updateDate = new Date();
+
+    const dateDifference = currentDate.getTime() - updateDate.getTime();
+
+    // Only update all the characteristics if previous update is older than 5 seconds
+    // This speeds up this plug-in and prevents updating the data for every Characteristic getter
+    if (dateDifference >= this.dateDiff) {
+      try {
+        this.logger.debug(`Getting date report with characteristic: ${characteristic.name}`);
+        await this.getTemperatures();
+      } catch (e) {
+        this.logger.error(`Error getting data report: ${e}`);
+        throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+    }
+
+    return this.service.getCharacteristic(characteristic).value!;
   }
 
-  private updateHeatingState(state: CharacteristicValue){
-    this.service.updateCharacteristic(this.Characteristic.CurrentHeatingCoolingState, state);
+  private async getSerial(): Promise<string> {
+    try {
+      return await this.thermostat.getDeviceId();
+    }catch (e) {
+      this.logger.error(`Error getting serial: ${e}`);
+      throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+  }
+
+  private async getTargetTemperature() {
+    this.logger.debug('Getting target temperature');
+    return this.getCharacteristic(this.Characteristic.TargetTemperature);
+  }
+
+  private async getCurrentTemperature(): Promise<CharacteristicValue> {
+    this.logger.debug('Getting current temperature');
+    return this.getCharacteristic(this.Characteristic.TargetTemperature);
+  }
+
+  private async getCurrentHeatingState(): Promise<CharacteristicValue> {
+    this.logger.debug('Getting current heating state');
+    return this.getCharacteristic(this.Characteristic.CurrentHeatingCoolingState);
+  }
+
+  async setTargetTemperature(targetTemperature: CharacteristicValue) {
+    try {
+      this.logger.debug('Updating target temperature to ' + targetTemperature);
+      const data = {ch_mode_temp: targetTemperature};
+      await this.thermostat.updateData(data);
+    }catch (e) {
+      this.logger.error(`Error setting target temperature: ${e}`);
+      throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
   }
 }
-

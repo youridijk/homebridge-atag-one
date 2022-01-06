@@ -1,15 +1,26 @@
 {
   "pluginAlias": "AtagOne",
-  "pluginType": "platform",
+  "pluginType": "accessory",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
       "name": {
-        "title": "Name",
+        "title": "Name of the device",
         "type": "string",
-        "required": true,
-        "default": "Example Dynamic Platform"
+        "required": true
+      },
+      "minimumTargetValue": {
+        "title": "Minimum TargetValue",
+        "type": "number",
+        "required": false,
+        "minimum": 4,
+        "maximum": 20
+      },
+      "ipAddress": {
+        "title": "Thermostat IP address. Will only be used if ip-address can't be found in the network.",
+        "type": "string",
+        "required": false
       }
     }
   }
