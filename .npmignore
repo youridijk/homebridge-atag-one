@@ -15,6 +15,12 @@ tsconfig.json
 # vscode
 .vscode
 
+# intellij
+.idea
+
+# homebridge config sym link
+homebridge-config.json
+
 # nodemon
 nodemon.json
 
@@ -133,3 +139,5 @@ dist
 .yarn/unplugged
 .yarn/build-state.yml
 .pnp.*
+
+device-config.json

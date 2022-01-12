@@ -1,16 +1,16 @@
 {
-  "private": true,
   "displayName": "Homebridge Atag ONE",
   "name": "homebridge-atag-one",
-  "version": "1.0.0",
-  "description": "A plugin that adds Atag ONE thermostat support to homekit",
+  "version": "1.0.1",
+  "description": "A plugin that adds Atag ONE thermostat support to HomeKit",
   "license": "Apache-2.0",
+  "author": "youridijk",
   "repository": {
     "type": "git",
-    "url": "git://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "git://github.com/youridijk/homebridge-atag-one.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/youridijk/homebridge-atag-one/issues"
   },
   "engines": {
     "node": ">=14.18.1",
@@ -24,7 +24,11 @@
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "atag one",
+    "atag",
+    "homebridge-atag-one",
+    "homebridge atag one"
   ],
   "devDependencies": {
     "@types/node": "^16.10.9",
