@@ -16,9 +16,10 @@ export class AtagThermostat {
     private readonly config: AccessoryConfig,
     private readonly api: API,
   ) {
-    const deviceConfig = readDeviceConfig();
-
     const configIpAddress: string = config['ipAddress'];
+
+    // eslint-disable-next-line eqeqeq
+    const cacheUrl = (config['cacheUrl'] ?? true) == true;
     let baseUrl: string | undefined;
 
     // Optional ip of the thermostat can be entered in the config
@@ -26,14 +27,22 @@ export class AtagThermostat {
     if(configIpAddress){
       baseUrl = `http://${configIpAddress}:10000`;
       this.logger.info('Loaded base url from config');
-    } else if(deviceConfig['baseUrl']){
-      baseUrl = deviceConfig['baseUrl'];
-      this.logger.info('Loaded base url from stored config');
+    } else if(cacheUrl){
+      const {baseUrl: configBaseUrl} = readDeviceConfig();
+
+      if(configBaseUrl){
+        baseUrl = configBaseUrl;
+        this.logger.info('Loaded base url from stored config');
+      }
     }
 
-    this.thermostat = new AtagOne(baseUrl);
-    this.thermostat.startBroadCastSocket(newBaseUrl => {
-      this.logger.info(`New base url: ${newBaseUrl}`);
+    this.thermostat = new AtagOne(cacheUrl, baseUrl);
+    this.thermostat.startBroadCastSocket((newBaseUrl, error) => {
+      if(error){
+        this.logger.error(`Error updating base URL in device-config.json: ${error}`);
+      }else {
+        this.logger.info(`New base url: ${newBaseUrl}`);
+      }
     });
 
     this.initCharacteristics();

@@ -121,3 +121,4 @@ web_modules/
 homebridge-config.json
 .idea
 device-config.json
+src/test.ts

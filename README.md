@@ -13,10 +13,14 @@ Example config.json
 ```
 
 Optionally you can pass a `minimumTargetValue` key to the JSON to specify the lowest target temperature in HomeKit
-(the default is 16℃).
+(the default is 16 degrees celsius).
 
 In addition, you can specify an `ipAddress` key to specify the ip-address of the thermostat in case it can't be 
 found in the network.
+
+Extra, you can specify a `cacheUrl` option, to enable or disable storing the base url of your Atag One.
+This storing is used to speed up the booting of this plug-in. Without storing the base url, you have to wait
+for a broadcast message from the Atag One to control the Atag One.
 
 ## Device discovery
 To discover the thermostat in the local network, we can use the fact that the thermostat broadcasts a message 
@@ -34,6 +38,7 @@ An example config.json with these two keys:
   "accessory": "AtagOne",
   "name": "Atag One",
   "minimumTargetValue": 10,
-  "ipAddress": "10.0.0.19"
+  "ipAddress": "10.0.0.19",
+  "cacheUrl": true
 }
 ```

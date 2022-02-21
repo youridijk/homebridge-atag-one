@@ -9,6 +9,7 @@ export class AtagOne {
   // private broadcastSocketIsStarted = false;
 
   constructor(
+    private readonly cacheUrl: boolean,
     private baseUrl?: string | undefined,
   ) {
   }
@@ -127,16 +128,16 @@ export class AtagOne {
   }
 
   public async getDeviceId(): Promise<string> {
-    if (this.deviceId) {
-      return this.deviceId;
-    } else {
+    if(!this.deviceId){
       const dataReport = await this.getDataReport();
       if ('status' in dataReport && 'device_id' in dataReport['status']) {
-        return dataReport['status']['device_id'];
+        this.deviceId = dataReport['status']['device_id'];
       } else {
         return 'Unknown';
       }
     }
+
+    return this.deviceId!;
   }
 
   private handleBroadcastMessage(message: Buffer, peer: RemoteInfo): boolean {
@@ -148,19 +149,34 @@ export class AtagOne {
 
       if (urlChanged) {
         this.baseUrl = newUrl;
-        updateDeviceConfig(newUrl);
+
+        if(this.cacheUrl) {
+          updateDeviceConfig(newUrl);
+        }
       }
     }
     return urlChanged;
   }
 
   // Atag one thermostat sends every 10 seconds UDP broadcast message in the network
-  public startBroadCastSocket(newBaseUrlCallback?: ((newBaseUrl: string) => void)) {
+  public startBroadCastSocket(newBaseUrlCallback?: ((newBaseUrl?: string, error?: Error) => void)) {
     if (!this.broadcastSocket) {
       this.broadcastSocket = dgram.createSocket('udp4', ((message, remoteInfo) => {
-        const urlChanged = this.handleBroadcastMessage(message, remoteInfo);
-        if(urlChanged && newBaseUrlCallback && this.baseUrl !== undefined){
-          newBaseUrlCallback(this.baseUrl);
+        try {
+          const urlChanged = this.handleBroadcastMessage(message, remoteInfo);
+
+
+          if(urlChanged && newBaseUrlCallback && this.baseUrl !== undefined){
+            newBaseUrlCallback(this.baseUrl, undefined);
+          }
+        }catch (error: unknown){
+          if(newBaseUrlCallback){
+            if(error instanceof Error) {
+              newBaseUrlCallback(undefined, error);
+            }else if(typeof error === 'string'){
+              newBaseUrlCallback(undefined, new Error(error));
+            }
+          }
         }
       }));
       this.broadcastSocket.bind(11_000);
