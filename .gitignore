@@ -122,3 +122,4 @@ homebridge-config.json
 .idea
 device-config.json
 src/test.ts
+.DS_Store

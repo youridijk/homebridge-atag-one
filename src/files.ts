@@ -3,12 +3,7 @@ import fs from 'fs';
 const configFileName = 'device-config.json';
 
 export function updateDeviceConfig(baseUrl: string) {
-  // eslint-disable-next-line eqeqeq
-  const data = {
-    baseUrl,
-  };
-
-  fs.writeFileSync(configFileName, JSON.stringify(data));
+  fs.writeFileSync(configFileName, JSON.stringify({baseUrl}));
 }
 
 export function readDeviceConfig(){

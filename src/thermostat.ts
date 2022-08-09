@@ -84,7 +84,7 @@ export class AtagThermostat {
     // But you can change this in the config
     this.service.getCharacteristic(this.Characteristic.TargetTemperature)
       .setProps({
-        minValue: this.config['minimumTargetValue'] || 16,
+        minValue: this.config['minimumTargetValue'] || 12,
         maxValue: 25,
         minStep: 0.5,
       })
