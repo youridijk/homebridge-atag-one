@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Atag ONE",
   "name": "homebridge-atag-one",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A plugin that adds Atag ONE thermostat support to HomeKit",
   "license": "Apache-2.0",
   "author": "youridijk",
