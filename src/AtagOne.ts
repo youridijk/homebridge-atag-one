@@ -131,7 +131,7 @@ export class AtagOne {
     if(!this.deviceId){
       const dataReport = await this.getDataReport();
       if ('status' in dataReport && 'device_id' in dataReport['status']) {
-        this.deviceId = dataReport['status']['device_id'];
+        this.deviceId = dataReport['status']['device_id'] as string;
       } else {
         return 'Unknown';
       }
