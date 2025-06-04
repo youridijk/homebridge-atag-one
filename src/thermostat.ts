@@ -146,14 +146,14 @@ export class AtagThermostat {
     }
   }
 
-  private async getTargetTemperature() {
+  private async getTargetTemperature(): Promise<CharacteristicValue> {
     this.logger.debug('Getting target temperature');
     return this.getCharacteristic(this.Characteristic.TargetTemperature);
   }
 
   private async getCurrentTemperature(): Promise<CharacteristicValue> {
     this.logger.debug('Getting current temperature');
-    return this.getCharacteristic(this.Characteristic.TargetTemperature);
+    return this.getCharacteristic(this.Characteristic.CurrentTemperature);
   }
 
   private async getCurrentHeatingState(): Promise<CharacteristicValue> {
