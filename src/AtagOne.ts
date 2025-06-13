@@ -43,7 +43,7 @@ export class AtagOne {
     }
   }
 
-  public async getDataReport(): Promise<object> {
+  public async getDataReport(): Promise<Record<string, string | Record<string, string>>> {
     if (this.baseUrl === undefined) {
       throw new Error('Base url is undefined!');
     }
@@ -130,7 +130,7 @@ export class AtagOne {
   public async getDeviceId(): Promise<string> {
     if(!this.deviceId){
       const dataReport = await this.getDataReport();
-      if ('status' in dataReport && 'device_id' in dataReport['status']) {
+      if ('status' in dataReport && 'device_id' in (dataReport['status'] as Record<string, string>)) {
         this.deviceId = dataReport['status']['device_id'] as string;
       } else {
         return 'Unknown';
